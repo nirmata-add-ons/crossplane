@@ -1,0 +1,956 @@
+---
+apiVersion: "rbac.authorization.k8s.io/v1"
+kind: "ClusterRole"
+metadata:
+  annotations: {}
+  name: "crossplane-admin"
+  labels:
+    app: "crossplane"
+    heritage: "Helm"
+    app.kubernetes.io/name: "crossplane"
+    chart: "crossplane-1.5.1"
+    release: "crossplane"
+aggregationRule:
+  clusterRoleSelectors:
+  - matchLabels:
+      rbac.crossplane.io/aggregate-to-admin: "true"
+    matchExpressions: []
+
+---
+apiVersion: "rbac.authorization.k8s.io/v1"
+kind: "ClusterRole"
+metadata:
+  annotations: {}
+  name: "crossplane-edit"
+  labels:
+    app: "crossplane"
+    heritage: "Helm"
+    app.kubernetes.io/name: "crossplane"
+    chart: "crossplane-1.5.1"
+    release: "crossplane"
+aggregationRule:
+  clusterRoleSelectors:
+  - matchLabels:
+      rbac.crossplane.io/aggregate-to-edit: "true"
+    matchExpressions: []
+
+---
+apiVersion: "rbac.authorization.k8s.io/v1"
+kind: "ClusterRole"
+metadata:
+  annotations: {}
+  name: "crossplane-browse"
+  labels:
+    app: "crossplane"
+    heritage: "Helm"
+    app.kubernetes.io/name: "crossplane"
+    chart: "crossplane-1.5.1"
+    release: "crossplane"
+aggregationRule:
+  clusterRoleSelectors:
+  - matchLabels:
+      rbac.crossplane.io/aggregate-to-browse: "true"
+    matchExpressions: []
+
+---
+kind: "Deployment"
+apiVersion: "apps/v1"
+metadata:
+  annotations: {}
+  name: "crossplane"
+  labels:
+    app: "crossplane"
+    app.kubernetes.io/name: "crossplane"
+    release: "crossplane"
+    heritage: "Helm"
+    chart: "crossplane-1.5.1"
+    app.kubernetes.io/component: "deployment.crossplane"
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app: "crossplane"
+      release: "crossplane"
+    matchExpressions: []
+  strategy:
+    type: "RollingUpdate"
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      annotations: {}
+      labels:
+        app: "crossplane"
+        app.kubernetes.io/name: "crossplane"
+        release: "crossplane"
+        app.kubernetes.io/component: "deployment.crossplane"
+    spec:
+      terminationGracePeriodSeconds: 30
+      nodeSelector: {}
+      serviceAccountName: "crossplane"
+      volumes:
+      - name: "package-cache"
+        emptyDir:
+          sizeLimit: "5Mi"
+      containers:
+      - name: "crossplane"
+        image: "crossplane/crossplane:v1.5.1"
+        command: []
+        args:
+        - "core"
+        - "start"
+        imagePullPolicy: "IfNotPresent"
+        env:
+        - name: "POD_NAMESPACE"
+          valueFrom:
+            fieldRef:
+              apiVersion: "v1"
+              fieldPath: "metadata.namespace"
+        - name: "LEADER_ELECTION"
+          value: "true"
+        volumeMounts:
+        - name: "package-cache"
+          mountPath: "/cache"
+        securityContext:
+          runAsUser: 65532
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          runAsGroup: 65532
+        resources:
+          limits:
+            cpu: "100m"
+            memory: "512Mi"
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+      securityContext:
+        supplementalGroups: []
+      initContainers:
+      - name: "crossplane-init"
+        image: "crossplane/crossplane:v1.5.1"
+        command: []
+        args:
+        - "core"
+        - "init"
+        imagePullPolicy: "IfNotPresent"
+        securityContext:
+          runAsUser: 65532
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          runAsGroup: 65532
+        resources:
+          limits:
+            cpu: "100m"
+            memory: "512Mi"
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+
+---
+kind: "Deployment"
+apiVersion: "apps/v1"
+metadata:
+  annotations: {}
+  name: "crossplane-rbac-manager"
+  labels:
+    app: "crossplane-rbac-manager"
+    app.kubernetes.io/name: "crossplane"
+    release: "crossplane"
+    heritage: "Helm"
+    chart: "crossplane-1.5.1"
+    app.kubernetes.io/component: "deployment.crossplane-rbac-manager"
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app: "crossplane-rbac-manager"
+      release: "crossplane"
+    matchExpressions: []
+  strategy:
+    type: "RollingUpdate"
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      annotations: {}
+      labels:
+        app: "crossplane-rbac-manager"
+        app.kubernetes.io/name: "crossplane"
+        release: "crossplane"
+        app.kubernetes.io/component: "deployment.crossplane-rbac-manager"
+    spec:
+      terminationGracePeriodSeconds: 30
+      nodeSelector: {}
+      serviceAccountName: "rbac-manager"
+      containers:
+      - name: "crossplane"
+        image: "crossplane/crossplane:v1.5.1"
+        command: []
+        args:
+        - "rbac"
+        - "start"
+        - "--manage=All"
+        - "--provider-clusterrole=crossplane:allowed-provider-permissions"
+        imagePullPolicy: "IfNotPresent"
+        env:
+        - name: "LEADER_ELECTION"
+          value: "true"
+        securityContext:
+          runAsUser: 65532
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          runAsGroup: 65532
+        resources:
+          limits:
+            cpu: "100m"
+            memory: "512Mi"
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+      securityContext:
+        supplementalGroups: []
+      initContainers:
+      - name: "crossplane-init"
+        image: "crossplane/crossplane:v1.5.1"
+        command: []
+        args:
+        - "rbac"
+        - "init"
+        imagePullPolicy: "IfNotPresent"
+        securityContext:
+          runAsUser: 65532
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          runAsGroup: 65532
+        resources:
+          limits:
+            cpu: "100m"
+            memory: "512Mi"
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+
+---
+apiVersion: "rbac.authorization.k8s.io/v1"
+kind: "ClusterRole"
+rules:
+- apiGroups:
+  - ""
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "events"
+  verbs:
+  - "get"
+  - "list"
+  - "watch"
+- apiGroups:
+  - "apiextensions.crossplane.io"
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "*"
+  verbs:
+  - "get"
+  - "list"
+  - "watch"
+metadata:
+  annotations: {}
+  name: "crossplane:aggregate-to-browse"
+  labels:
+    app: "crossplane"
+    app.kubernetes.io/name: "crossplane"
+    release: "crossplane"
+    rbac.crossplane.io/aggregate-to-browse: "true"
+    heritage: "Helm"
+    chart: "crossplane-1.5.1"
+
+---
+apiVersion: "rbac.authorization.k8s.io/v1"
+kind: "ClusterRole"
+metadata:
+  annotations: {}
+  name: "crossplane"
+  labels:
+    app: "crossplane"
+    heritage: "Helm"
+    app.kubernetes.io/name: "crossplane"
+    chart: "crossplane-1.5.1"
+    release: "crossplane"
+aggregationRule:
+  clusterRoleSelectors:
+  - matchLabels:
+      rbac.crossplane.io/aggregate-to-crossplane: "true"
+    matchExpressions: []
+
+---
+apiVersion: "rbac.authorization.k8s.io/v1"
+kind: "ClusterRole"
+rules:
+- apiGroups:
+  - ""
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "events"
+  verbs:
+  - "get"
+  - "list"
+  - "watch"
+- apiGroups:
+  - ""
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "secrets"
+  verbs:
+  - "*"
+- apiGroups:
+  - ""
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "namespaces"
+  verbs:
+  - "get"
+  - "list"
+  - "watch"
+- apiGroups:
+  - "apiextensions.crossplane.io"
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "*"
+  verbs:
+  - "*"
+- apiGroups:
+  - "pkg.crossplane.io"
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "providers"
+  - "configurations"
+  - "providerrevisions"
+  - "configurationrevisions"
+  verbs:
+  - "*"
+metadata:
+  annotations: {}
+  name: "crossplane:aggregate-to-edit"
+  labels:
+    app: "crossplane"
+    app.kubernetes.io/name: "crossplane"
+    release: "crossplane"
+    heritage: "Helm"
+    chart: "crossplane-1.5.1"
+    rbac.crossplane.io/aggregate-to-edit: "true"
+
+---
+metadata:
+  name: "awsconfig"
+apiVersion: "aws.crossplane.io/v1beta1"
+kind: "ProviderConfig"
+spec:
+  credentials:
+    secretRef:
+      namespace: "crossplane-system"
+      name: "aws-secret-creds"
+      key: "creds"
+    source: "Secret"
+
+---
+apiVersion: "rbac.authorization.k8s.io/v1"
+kind: "ClusterRole"
+rules:
+- apiGroups:
+  - ""
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "events"
+  verbs:
+  - "get"
+  - "list"
+  - "watch"
+- apiGroups:
+  - ""
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "namespaces"
+  verbs:
+  - "get"
+  - "list"
+  - "watch"
+- apiGroups:
+  - "apiextensions.crossplane.io"
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "*"
+  verbs:
+  - "get"
+  - "list"
+  - "watch"
+- apiGroups:
+  - "pkg.crossplane.io"
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "providers"
+  - "configurations"
+  - "providerrevisions"
+  - "configurationrevisions"
+  verbs:
+  - "get"
+  - "list"
+  - "watch"
+metadata:
+  annotations: {}
+  name: "crossplane:aggregate-to-view"
+  labels:
+    app: "crossplane"
+    app.kubernetes.io/name: "crossplane"
+    release: "crossplane"
+    rbac.crossplane.io/aggregate-to-view: "true"
+    heritage: "Helm"
+    chart: "crossplane-1.5.1"
+
+---
+apiVersion: "rbac.authorization.k8s.io/v1"
+kind: "ClusterRole"
+rules:
+- apiGroups:
+  - ""
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "events"
+  verbs:
+  - "get"
+  - "list"
+  - "watch"
+metadata:
+  annotations: {}
+  name: "crossplane:aggregate-to-ns-view"
+  labels:
+    app: "crossplane"
+    rbac.crossplane.io/aggregate-to-ns-view: "true"
+    app.kubernetes.io/name: "crossplane"
+    release: "crossplane"
+    rbac.crossplane.io/base-of-ns-view: "true"
+    heritage: "Helm"
+    chart: "crossplane-1.5.1"
+
+---
+apiVersion: "rbac.authorization.k8s.io/v1"
+kind: "ClusterRoleBinding"
+metadata:
+  annotations: {}
+  name: "crossplane-rbac-manager"
+  labels:
+    app: "crossplane"
+    heritage: "Helm"
+    app.kubernetes.io/name: "crossplane"
+    chart: "crossplane-1.5.1"
+    release: "crossplane"
+subjects:
+- kind: "ServiceAccount"
+  name: "rbac-manager"
+  namespace: "crossplane-system"
+roleRef:
+  apiGroup: "rbac.authorization.k8s.io"
+  kind: "ClusterRole"
+  name: "crossplane-rbac-manager"
+
+---
+apiVersion: "rbac.authorization.k8s.io/v1"
+kind: "ClusterRole"
+metadata:
+  annotations: {}
+  name: "crossplane:allowed-provider-permissions"
+  labels:
+    app: "crossplane"
+    heritage: "Helm"
+    app.kubernetes.io/name: "crossplane"
+    chart: "crossplane-1.5.1"
+    release: "crossplane"
+aggregationRule:
+  clusterRoleSelectors:
+  - matchLabels:
+      rbac.crossplane.io/aggregate-to-allowed-provider-permissions: "true"
+    matchExpressions: []
+
+---
+apiVersion: "rbac.authorization.k8s.io/v1"
+kind: "ClusterRole"
+rules:
+- apiGroups:
+  - ""
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "events"
+  verbs:
+  - "create"
+  - "update"
+  - "patch"
+  - "delete"
+- apiGroups:
+  - ""
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "namespaces"
+  - "serviceaccounts"
+  verbs:
+  - "get"
+  - "list"
+  - "watch"
+- apiGroups:
+  - "apiextensions.crossplane.io"
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "compositeresourcedefinitions"
+  verbs:
+  - "get"
+  - "list"
+  - "watch"
+- apiGroups:
+  - "pkg.crossplane.io"
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "providerrevisions"
+  verbs:
+  - "get"
+  - "list"
+  - "watch"
+- apiGroups:
+  - "apiextensions.k8s.io"
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "customresourcedefinitions"
+  verbs:
+  - "get"
+  - "list"
+  - "watch"
+- apiGroups:
+  - "rbac.authorization.k8s.io"
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "clusterroles"
+  - "roles"
+  verbs:
+  - "get"
+  - "list"
+  - "watch"
+  - "create"
+  - "update"
+  - "patch"
+  - "escalate"
+- apiGroups:
+  - "rbac.authorization.k8s.io"
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "clusterroles"
+  verbs:
+  - "bind"
+- apiGroups:
+  - "rbac.authorization.k8s.io"
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "clusterrolebindings"
+  verbs:
+  - "*"
+- apiGroups:
+  - ""
+  - "coordination.k8s.io"
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "configmaps"
+  - "leases"
+  verbs:
+  - "get"
+  - "list"
+  - "create"
+  - "update"
+  - "patch"
+  - "watch"
+  - "delete"
+metadata:
+  annotations: {}
+  name: "crossplane-rbac-manager"
+  labels:
+    app: "crossplane"
+    heritage: "Helm"
+    app.kubernetes.io/name: "crossplane"
+    chart: "crossplane-1.5.1"
+    release: "crossplane"
+
+---
+apiVersion: "v1"
+kind: "ServiceAccount"
+metadata:
+  annotations: {}
+  name: "crossplane"
+  labels:
+    app: "crossplane"
+    heritage: "Helm"
+    app.kubernetes.io/name: "crossplane"
+    chart: "crossplane-1.5.1"
+    release: "crossplane"
+imagePullSecrets:
+- name: "dockerhub"
+
+---
+apiVersion: "rbac.authorization.k8s.io/v1"
+kind: "ClusterRole"
+rules:
+- apiGroups:
+  - ""
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "events"
+  verbs:
+  - "get"
+  - "list"
+  - "watch"
+- apiGroups:
+  - ""
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "secrets"
+  verbs:
+  - "*"
+metadata:
+  annotations: {}
+  name: "crossplane:aggregate-to-ns-edit"
+  labels:
+    app: "crossplane"
+    app.kubernetes.io/name: "crossplane"
+    rbac.crossplane.io/base-of-ns-edit: "true"
+    release: "crossplane"
+    rbac.crossplane.io/aggregate-to-ns-edit: "true"
+    heritage: "Helm"
+    chart: "crossplane-1.5.1"
+
+---
+apiVersion: "rbac.authorization.k8s.io/v1"
+kind: "ClusterRole"
+metadata:
+  annotations: {}
+  name: "crossplane-view"
+  labels:
+    app: "crossplane"
+    heritage: "Helm"
+    app.kubernetes.io/name: "crossplane"
+    chart: "crossplane-1.5.1"
+    release: "crossplane"
+aggregationRule:
+  clusterRoleSelectors:
+  - matchLabels:
+      rbac.crossplane.io/aggregate-to-view: "true"
+    matchExpressions: []
+
+---
+apiVersion: "rbac.authorization.k8s.io/v1"
+kind: "ClusterRole"
+rules:
+- apiGroups:
+  - ""
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "events"
+  verbs:
+  - "get"
+  - "list"
+  - "watch"
+- apiGroups:
+  - ""
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "secrets"
+  verbs:
+  - "*"
+- apiGroups:
+  - "rbac.authorization.k8s.io"
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "roles"
+  verbs:
+  - "get"
+  - "list"
+  - "watch"
+- apiGroups:
+  - "rbac.authorization.k8s.io"
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "rolebindings"
+  verbs:
+  - "*"
+metadata:
+  annotations: {}
+  name: "crossplane:aggregate-to-ns-admin"
+  labels:
+    app: "crossplane"
+    rbac.crossplane.io/base-of-ns-admin: "true"
+    app.kubernetes.io/name: "crossplane"
+    release: "crossplane"
+    heritage: "Helm"
+    rbac.crossplane.io/aggregate-to-ns-admin: "true"
+    chart: "crossplane-1.5.1"
+
+---
+apiVersion: "v1"
+kind: "ServiceAccount"
+metadata:
+  annotations: {}
+  name: "rbac-manager"
+  labels:
+    app: "crossplane"
+    heritage: "Helm"
+    app.kubernetes.io/name: "crossplane"
+    chart: "crossplane-1.5.1"
+    release: "crossplane"
+
+---
+apiVersion: "rbac.authorization.k8s.io/v1"
+kind: "ClusterRoleBinding"
+metadata:
+  annotations: {}
+  name: "crossplane-admin"
+  labels:
+    app.kubernetes.io/name: "crossplane"
+subjects:
+- apiGroup: "rbac.authorization.k8s.io"
+  kind: "Group"
+  name: "crossplane:masters"
+roleRef:
+  apiGroup: "rbac.authorization.k8s.io"
+  kind: "ClusterRole"
+  name: "crossplane-admin"
+
+---
+apiVersion: "rbac.authorization.k8s.io/v1"
+kind: "ClusterRole"
+rules:
+- apiGroups:
+  - ""
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "events"
+  verbs:
+  - "create"
+  - "update"
+  - "patch"
+  - "delete"
+- apiGroups:
+  - "apiextensions.k8s.io"
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "customresourcedefinitions"
+  verbs:
+  - "*"
+- apiGroups:
+  - ""
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "secrets"
+  verbs:
+  - "get"
+  - "list"
+  - "watch"
+  - "create"
+  - "update"
+  - "patch"
+- apiGroups:
+  - ""
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "serviceaccounts"
+  verbs:
+  - "*"
+- apiGroups:
+  - "apiextensions.crossplane.io"
+  - "pkg.crossplane.io"
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "*"
+  verbs:
+  - "*"
+- apiGroups:
+  - "extensions"
+  - "apps"
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "deployments"
+  verbs:
+  - "get"
+  - "list"
+  - "create"
+  - "update"
+  - "patch"
+  - "delete"
+  - "watch"
+- apiGroups:
+  - ""
+  - "coordination.k8s.io"
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "configmaps"
+  - "leases"
+  verbs:
+  - "get"
+  - "list"
+  - "create"
+  - "update"
+  - "patch"
+  - "watch"
+  - "delete"
+metadata:
+  annotations: {}
+  name: "crossplane:system:aggregate-to-crossplane"
+  labels:
+    app: "crossplane"
+    app.kubernetes.io/name: "crossplane"
+    crossplane.io/scope: "system"
+    release: "crossplane"
+    heritage: "Helm"
+    rbac.crossplane.io/aggregate-to-crossplane: "true"
+    chart: "crossplane-1.5.1"
+
+---
+apiVersion: "rbac.authorization.k8s.io/v1"
+kind: "ClusterRoleBinding"
+metadata:
+  annotations: {}
+  name: "crossplane"
+  labels:
+    app: "crossplane"
+    heritage: "Helm"
+    app.kubernetes.io/name: "crossplane"
+    chart: "crossplane-1.5.1"
+    release: "crossplane"
+subjects:
+- kind: "ServiceAccount"
+  name: "crossplane"
+  namespace: "crossplane-system"
+roleRef:
+  apiGroup: "rbac.authorization.k8s.io"
+  kind: "ClusterRole"
+  name: "crossplane"
+
+---
+apiVersion: "rbac.authorization.k8s.io/v1"
+kind: "ClusterRole"
+rules:
+- apiGroups:
+  - ""
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "events"
+  verbs:
+  - "get"
+  - "list"
+  - "watch"
+- apiGroups:
+  - ""
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "secrets"
+  - "namespaces"
+  verbs:
+  - "*"
+- apiGroups:
+  - "rbac.authorization.k8s.io"
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "clusterroles"
+  - "roles"
+  verbs:
+  - "get"
+  - "list"
+  - "watch"
+- apiGroups:
+  - "rbac.authorization.k8s.io"
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "clusterrolebindings"
+  - "rolebindings"
+  verbs:
+  - "*"
+- apiGroups:
+  - "apiextensions.crossplane.io"
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "*"
+  verbs:
+  - "*"
+- apiGroups:
+  - "pkg.crossplane.io"
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "providers"
+  - "configurations"
+  - "providerrevisions"
+  - "configurationrevisions"
+  verbs:
+  - "*"
+- apiGroups:
+  - "apiextensions.k8s.io"
+  nonResourceURLs: []
+  resourceNames: []
+  resources:
+  - "customresourcedefinitions"
+  verbs:
+  - "get"
+  - "list"
+  - "watch"
+metadata:
+  annotations: {}
+  name: "crossplane:aggregate-to-admin"
+  labels:
+    app: "crossplane"
+    rbac.crossplane.io/aggregate-to-admin: "true"
+    app.kubernetes.io/name: "crossplane"
+    release: "crossplane"
+    heritage: "Helm"
+    chart: "crossplane-1.5.1"
+
+---
+metadata:
+  name: "aws-provider"
+apiVersion: "pkg.crossplane.io/v1"
+kind: "Provider"
+spec:
+  package: "crossplane/provider-aws:alpha"
